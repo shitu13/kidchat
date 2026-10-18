@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pip the Parrot - Learn English</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700&display=swap" rel="stylesheet">
+<style>
+:root{--sky:#cdebff;--leaf:#1f9d63;--beak:#ff8a1f;--ink:#1d2a44;--sun:#ffd84d;--card:#fff;--chip:#fff3d6}
+@media (prefers-color-scheme:dark){:root{--sky:#14263d;--ink:#f3f7ff;--card:#223552;--chip:#33496b}}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{font-family:"Baloo 2",ui-rounded,"Comic Sans MS",system-ui,sans-serif;background:var(--sky);color:var(--ink);
+  display:flex;flex-direction:column;max-width:640px;margin:0 auto;font-size:20px}
+header{display:flex;align-items:center;gap:12px;padding:calc(10px + env(safe-area-inset-top,0px)) 16px 10px}
+.pip{font-size:44px;line-height:1}
+h1{font-size:22px;margin:0;line-height:1.1}
+.stars{display:flex;gap:4px;margin-top:2px}
+.stars i{width:18px;height:18px;border-radius:50%;background:#0002;display:block}
+.stars i.on{background:var(--sun);box-shadow:0 0 0 2px var(--beak) inset}
+.lvl{margin-left:auto;background:var(--leaf);color:#fff;border-radius:999px;padding:4px 14px;font-weight:700}
+#chat{flex:1;overflow-y:auto;padding:8px 16px;display:flex;flex-direction:column;gap:10px}
+.b{max-width:85%;padding:12px 16px;border-radius:22px;line-height:1.3;background:var(--card);align-self:flex-start;
+  border-bottom-left-radius:6px;white-space:pre-wrap}
+.b.me{align-self:flex-end;background:var(--sun);color:#1d2a44;border-radius:22px 22px 6px 22px}
+.b.support{border-left:8px solid #ff7a9c}.b.engagement{border-left:8px solid var(--beak)}
+.b.learning{border-left:8px solid var(--leaf)}
+.b button.say{border:0;background:none;font-size:18px;cursor:pointer;margin-left:6px;vertical-align:middle}
+#quick{display:flex;flex-wrap:wrap;gap:10px;padding:6px 16px}
+#quick button{font:inherit;font-weight:700;min-height:56px;padding:8px 22px;border-radius:999px;border:3px solid var(--leaf);
+  background:var(--chip);color:var(--ink);cursor:pointer}
+#quick button:active{transform:scale(.96)}
+form{display:flex;gap:8px;padding:8px 16px calc(12px + env(safe-area-inset-bottom,0px))}
+input{flex:1;min-width:0;font:inherit;padding:12px 18px;border-radius:999px;border:3px solid var(--ink);background:var(--card);color:var(--ink)}
+form button{font:inherit;font-weight:700;min-width:56px;min-height:56px;border-radius:999px;border:0;background:var(--leaf);color:#fff;cursor:pointer}
+form button.mic{background:var(--beak)}
+button:focus-visible,input:focus-visible{outline:4px solid var(--ink);outline-offset:2px}
+.typing{opacity:.6}
+@media (prefers-reduced-motion:no-preference){.b{animation:pop .18s ease-out}@keyframes pop{from{transform:scale(.94);opacity:0}}}
+</style>
+</head>
+<body>
+<header>
+  <div class="pip" aria-hidden="true">🦜</div>
+  <div><h1>Pip</h1><div class="stars" id="stars" aria-label="progress to next level"></div></div>
+  <div class="lvl" id="lvl">Level 1</div>
+</header>
+<main id="chat" aria-live="polite"></main>
+<div id="quick"></div>
+<form id="f" autocomplete="off">
+  <input id="in" maxlength="200" placeholder="Type here..." aria-label="Type your answer">
+  <button type="button" class="mic" id="mic" aria-label="Talk" hidden>🎤</button>
+  <button type="submit" aria-label="Send">➤</button>
+</form>
+<script>
+const $=id=>document.getElementById(id), chat=$("chat"), quick=$("quick"), inp=$("in");
+const sid=localStorage.pipSid||(localStorage.pipSid=(crypto.randomUUID?crypto.randomUUID():String(Math.random()).slice(2)));
+const synth=window.speechSynthesis;
+function speak(t){ if(!synth) return; synth.cancel();
+  const u=new SpeechSynthesisUtterance(t.replace(/[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}\u{FE0F}_]/gu,"")); u.lang="en-US"; u.rate=.85; u.pitch=1.2; synth.speak(u); }
+function bubble(t,cls){ const d=document.createElement("div"); d.className="b "+(cls||""); d.textContent=t;
+  if(cls&&cls!=="me"&&cls!=="typing"&&synth){const s=document.createElement("button");s.className="say";s.textContent="🔊";s.setAttribute("aria-label","Listen");s.onclick=()=>speak(t);d.append(s);}
+  chat.append(d); chat.scrollTop=chat.scrollHeight; return d; }
+function progress(p){ $("lvl").textContent="Level "+p.level;
+  $("stars").innerHTML=Array.from({length:p.level_target},(_,i)=>`<i class="${i<p.level_correct?"on":""}"></i>`).join(""); }
+async function send(text){
+  quick.innerHTML=""; if(text) bubble(text,"me");
+  const w=bubble("...","typing");
+  try{
+    const r=await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({session_id:sid,message:text})});
+    const d=await r.json(); w.remove(); bubble(d.reply,d.mode); speak(d.reply); progress(d.progress);
+    d.quick_replies.forEach(q=>{const b=document.createElement("button");b.textContent=q;b.onclick=()=>send(q);quick.append(b);});
+  }catch(e){ w.remove(); bubble("Oops! Let's try again.","support"); }
+}
+$("f").onsubmit=e=>{e.preventDefault(); const t=inp.value.trim(); if(t){inp.value=""; send(t);} };
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+if(SR){ const m=$("mic"); m.hidden=false; m.onclick=()=>{ const r=new SR(); r.lang="en-US"; r.onresult=e=>send(e.results[0][0].transcript); r.start(); }; }
+send("");   // first load: greeting, or "welcome back" for a returning child
+</script>
+</body>
+</html>
